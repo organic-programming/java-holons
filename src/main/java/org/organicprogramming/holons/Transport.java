@@ -3,6 +3,7 @@ package org.organicprogramming.holons;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.util.Objects;
 
 /**
  * URI-based listener factory for gRPC servers.
@@ -14,6 +15,8 @@ import java.net.ServerSocket;
  * <li>{@code unix://<path>} — Unix domain socket</li>
  * <li>{@code stdio://} — stdin/stdout pipe</li>
  * <li>{@code mem://} — in-process (testing)</li>
+ * <li>{@code ws://<host>:<port>} — WebSocket endpoint metadata</li>
+ * <li>{@code wss://<host>:<port>} — WebSocket over TLS metadata</li>
  * </ul>
  */
 public final class Transport {
@@ -32,47 +35,143 @@ public final class Transport {
         return idx >= 0 ? uri.substring(0, idx) : uri;
     }
 
+    /** Parsed transport URI. */
+    public record ParsedURI(
+            String raw,
+            String scheme,
+            String host,
+            Integer port,
+            String path,
+            boolean secure) {
+    }
+
+    /** Marker interface for transport listener variants. */
+    public interface Listener {
+    }
+
+    /** TCP socket listener. */
+    public record TcpListener(ServerSocket socket) implements Listener {
+    }
+
+    /** stdio listener marker (single connection semantics). */
+    public record StdioListener() implements Listener {
+    }
+
+    /** in-process listener marker (testing/composite semantics). */
+    public record MemListener() implements Listener {
+    }
+
+    /** WebSocket listener metadata (path + security only, no runtime server). */
+    public record WSListener(String host, int port, String path, boolean secure) implements Listener {
+    }
+
     /**
-     * Parse a transport URI and return a bound ServerSocket.
+     * Parse a transport URI into a normalized structure.
+     */
+    public static ParsedURI parseURI(String uri) {
+        String s = scheme(uri);
+        switch (s) {
+            case "tcp":
+                if (!uri.startsWith("tcp://")) {
+                    throw new IllegalArgumentException("invalid tcp URI: " + uri);
+                }
+                HostPort tcp = splitHostPort(uri.substring(6), 9090);
+                return new ParsedURI(uri, "tcp", tcp.host(), tcp.port(), null, false);
+            case "unix":
+                if (!uri.startsWith("unix://")) {
+                    throw new IllegalArgumentException("invalid unix URI: " + uri);
+                }
+                String unixPath = uri.substring(7);
+                if (unixPath.isEmpty()) {
+                    throw new IllegalArgumentException("invalid unix URI: " + uri);
+                }
+                return new ParsedURI(uri, "unix", null, null, unixPath, false);
+            case "stdio":
+                return new ParsedURI("stdio://", "stdio", null, null, null, false);
+            case "mem":
+                return new ParsedURI(uri.startsWith("mem://") ? uri : "mem://", "mem", null, null, null, false);
+            case "ws":
+            case "wss":
+                boolean secure = "wss".equals(s);
+                String prefix = secure ? "wss://" : "ws://";
+                if (!uri.startsWith(prefix)) {
+                    throw new IllegalArgumentException("invalid ws URI: " + uri);
+                }
+                String trimmed = uri.substring(prefix.length());
+                String addr = trimmed;
+                String path = "/grpc";
+                int slash = trimmed.indexOf('/');
+                if (slash >= 0) {
+                    addr = trimmed.substring(0, slash);
+                    path = trimmed.substring(slash);
+                    if (path.isEmpty()) {
+                        path = "/grpc";
+                    }
+                }
+                HostPort ws = splitHostPort(addr, secure ? 443 : 80);
+                return new ParsedURI(uri, s, ws.host(), ws.port(), path, secure);
+            default:
+                throw new IllegalArgumentException("unsupported transport URI: " + uri);
+        }
+    }
+
+    /**
+     * Parse a transport URI and return a listener variant.
      *
      * <p>
-     * For tcp:// and unix://, returns a real bound socket.
-     * For stdio:// and mem://, returns null (callers must handle
-     * these transports specially).
+     * TCP binds a real server socket. stdio/mem/ws return metadata
+     * listener variants and must be handled by the caller runtime.
      */
-    public static ServerSocket listen(String uri) throws IOException {
-        if (uri.startsWith("tcp://")) {
-            return listenTcp(uri.substring(6));
-        } else if (uri.startsWith("unix://")) {
-            throw new UnsupportedOperationException(
-                    "unix:// not supported by ServerSocket (use gRPC Netty channel)");
-        } else if (uri.equals("stdio://") || uri.equals("stdio")) {
-            return null; // stdio handled by caller
-        } else if (uri.startsWith("mem://")) {
-            return null; // in-process handled by caller
-        } else {
-            throw new IllegalArgumentException(
-                    "unsupported transport URI: " + uri);
+    public static Listener listen(String uri) throws IOException {
+        ParsedURI parsed = parseURI(uri);
+
+        switch (parsed.scheme()) {
+            case "tcp":
+                return new TcpListener(listenTcp(parsed));
+            case "unix":
+                throw new UnsupportedOperationException(
+                        "unix:// requires a Unix-domain capable gRPC transport runtime");
+            case "stdio":
+                return new StdioListener();
+            case "mem":
+                return new MemListener();
+            case "ws":
+            case "wss":
+                return new WSListener(
+                        Objects.requireNonNullElse(parsed.host(), "0.0.0.0"),
+                        Objects.requireNonNullElse(parsed.port(), parsed.secure() ? 443 : 80),
+                        Objects.requireNonNullElse(parsed.path(), "/grpc"),
+                        parsed.secure());
+            default:
+                throw new IllegalArgumentException("unsupported transport URI: " + uri);
         }
     }
 
     /** Bind a TCP server socket. */
-    private static ServerSocket listenTcp(String addr) throws IOException {
-        String host;
-        int port;
-        int colonIdx = addr.lastIndexOf(':');
-        if (colonIdx >= 0) {
-            host = addr.substring(0, colonIdx);
-            port = Integer.parseInt(addr.substring(colonIdx + 1));
-        } else {
-            host = "";
-            port = Integer.parseInt(addr);
-        }
+    private static ServerSocket listenTcp(ParsedURI parsed) throws IOException {
+        String host = Objects.requireNonNullElse(parsed.host(), "0.0.0.0");
+        int port = Objects.requireNonNullElse(parsed.port(), 9090);
 
         ServerSocket ss = new ServerSocket();
         ss.setReuseAddress(true);
-        ss.bind(new InetSocketAddress(
-                host.isEmpty() ? "0.0.0.0" : host, port));
+        ss.bind(new InetSocketAddress(host, port));
         return ss;
+    }
+
+    private record HostPort(String host, int port) {
+    }
+
+    private static HostPort splitHostPort(String addr, int defaultPort) {
+        if (addr.isEmpty()) {
+            return new HostPort("0.0.0.0", defaultPort);
+        }
+        int colonIdx = addr.lastIndexOf(':');
+        if (colonIdx >= 0) {
+            String host = addr.substring(0, colonIdx);
+            String portText = addr.substring(colonIdx + 1);
+            int port = portText.isEmpty() ? defaultPort : Integer.parseInt(portText);
+            return new HostPort(host.isEmpty() ? "0.0.0.0" : host, port);
+        }
+        return new HostPort(addr, defaultPort);
     }
 }

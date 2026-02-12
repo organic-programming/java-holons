@@ -30,6 +30,17 @@ gradle test
 
 | Class | Description |
 |-------|-------------|
-| `Transport` | `listen(uri)`, `scheme(uri)` — URI-based listener factory |
+| `Transport` | `parseURI(uri)`, `listen(uri)`, `scheme(uri)` — URI parser + listener variants |
 | `Serve` | `parseFlags(args)` — CLI arg extraction |
 | `Identity` | `parseHolon(path)` — HOLON.md parser with SnakeYAML |
+
+## Transport support
+
+| Scheme | Support |
+|--------|---------|
+| `tcp://<host>:<port>` | Bound server socket (`Transport.TcpListener`) |
+| `unix://<path>` | Parsed; runtime binding requires Unix-domain capable gRPC stack |
+| `stdio://` | Listener marker (`Transport.StdioListener`) |
+| `mem://` | Listener marker (`Transport.MemListener`) |
+| `ws://<host>:<port>` | Listener metadata (`Transport.WSListener`) |
+| `wss://<host>:<port>` | Listener metadata (`Transport.WSListener`) |

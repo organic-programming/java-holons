@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -20,6 +19,8 @@ class HolonsTest {
         assertEquals("unix", Transport.scheme("unix:///tmp/x.sock"));
         assertEquals("stdio", Transport.scheme("stdio://"));
         assertEquals("mem", Transport.scheme("mem://"));
+        assertEquals("ws", Transport.scheme("ws://127.0.0.1:8080/grpc"));
+        assertEquals("wss", Transport.scheme("wss://example.com:443/grpc"));
     }
 
     @Test
@@ -29,10 +30,40 @@ class HolonsTest {
 
     @Test
     void tcpListen() throws IOException {
-        try (ServerSocket ss = Transport.listen("tcp://127.0.0.1:0")) {
+        Transport.TcpListener lis = assertInstanceOf(
+                Transport.TcpListener.class,
+                Transport.listen("tcp://127.0.0.1:0"));
+        try (var ss = lis.socket()) {
             assertNotNull(ss);
             assertTrue(ss.getLocalPort() > 0);
         }
+    }
+
+    @Test
+    void parseUriWssDefaultPath() {
+        Transport.ParsedURI parsed = Transport.parseURI("wss://example.com:8443");
+        assertEquals("wss", parsed.scheme());
+        assertEquals("example.com", parsed.host());
+        assertEquals(8443, parsed.port());
+        assertEquals("/grpc", parsed.path());
+        assertTrue(parsed.secure());
+    }
+
+    @Test
+    void stdioAndMemListenVariants() throws IOException {
+        assertTrue(Transport.listen("stdio://") instanceof Transport.StdioListener);
+        assertTrue(Transport.listen("mem://") instanceof Transport.MemListener);
+    }
+
+    @Test
+    void wsListenVariant() throws IOException {
+        Transport.WSListener ws = assertInstanceOf(
+                Transport.WSListener.class,
+                Transport.listen("ws://127.0.0.1:8080/holon"));
+        assertEquals("127.0.0.1", ws.host());
+        assertEquals(8080, ws.port());
+        assertEquals("/holon", ws.path());
+        assertFalse(ws.secure());
     }
 
     @Test
