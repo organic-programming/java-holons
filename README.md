@@ -17,8 +17,8 @@ status: draft
 ---
 # java-holons
 
-**Java SDK for Organic Programming** — transport, serve, and identity
-utilities for building holons in Java.
+**Java SDK for Organic Programming** — transport, serve, identity,
+and Holon-RPC client utilities for building holons in Java.
 
 ## Build & Test
 
@@ -33,6 +33,7 @@ gradle test
 | `Transport` | `parseURI(uri)`, `listen(uri)`, `scheme(uri)` — URI parser + listener variants |
 | `Serve` | `parseFlags(args)` — CLI arg extraction |
 | `Identity` | `parseHolon(path)` — HOLON.md parser with SnakeYAML |
+| `HolonRPCClient` | `connect(url)`, `invoke(method, params)`, `register(method, handler)`, `close()` |
 
 ## Transport support
 
@@ -51,6 +52,7 @@ Implemented parity:
 
 - URI parsing and listener dispatch semantics
 - Native runtime listener for `tcp://`
+- Holon-RPC client protocol support over `ws://` / `wss://` (JSON-RPC 2.0, heartbeat, reconnect)
 - Standard serve flag parsing
 - HOLON identity parsing
 
@@ -64,5 +66,6 @@ Not currently achievable in this minimal Java core (justified gaps):
 - `ws://` / `wss://` runtime listener parity:
   - No official gRPC Java WebSocket server transport for HTTP/2 framing in the core stack.
   - Exposed as metadata only.
-- Transport-agnostic gRPC client helpers (`Dial`, `DialStdio`, `DialMem`, `DialWebSocket`):
-  - Requires a dedicated Java gRPC adapter layer that is not yet included.
+- Full gRPC transport parity (`Dial("tcp://...")`, `Dial("stdio://...")`, `Listen("stdio://...")`, and `Serve.Run()` wiring):
+  - gRPC Java has no official stdio transport equivalent to Go `net.Listener` for process pipes.
+  - A complete `serve.Run()` equivalent also needs custom signal + reflection wiring not yet included in this SDK core.

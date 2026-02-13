@@ -19,6 +19,7 @@ dependencies {
     api 'io.grpc:grpc-protobuf:1.60.0'
     api 'io.grpc:grpc-stub:1.60.0'
     api 'io.grpc:grpc-services:1.60.0'
+    implementation 'com.google.code.gson:gson:2.11.0'
     implementation 'org.yaml:snakeyaml:2.2'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
