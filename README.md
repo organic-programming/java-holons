@@ -40,9 +40,9 @@ gradle test
 | Scheme | Support |
 |--------|---------|
 | `tcp://<host>:<port>` | Bound server socket (`Transport.TcpListener`) |
-| `unix://<path>` | Parsed; runtime binding requires Unix-domain capable gRPC stack |
+| `unix://<path>` | Native runtime listener + dial (`Transport.UnixListener`, `Transport.dialUnix`) |
 | `stdio://` | Listener marker (`Transport.StdioListener`) |
-| `mem://` | Listener marker (`Transport.MemListener`) |
+| `mem://` | Native in-process listener + dial (`Transport.MemListener`, `Transport.memDial`) |
 | `ws://<host>:<port>` | Listener metadata (`Transport.WSListener`) |
 | `wss://<host>:<port>` | Listener metadata (`Transport.WSListener`) |
 
@@ -52,17 +52,16 @@ Implemented parity:
 
 - URI parsing and listener dispatch semantics
 - Native runtime listener for `tcp://`
+- Native runtime listener + dial for `unix://`
+- Native in-process listener + dial for `mem://`
 - Holon-RPC client protocol support over `ws://` / `wss://` (JSON-RPC 2.0, heartbeat, reconnect)
 - Standard serve flag parsing
 - HOLON identity parsing
 
 Not currently achievable in this minimal Java core (justified gaps):
 
-- `unix://` native runtime binding:
-  - Requires a Unix-domain capable Java gRPC runtime stack (typically Netty native transport).
-  - This SDK intentionally stays on pure JDK socket primitives.
-- `stdio://` and `mem://` runtime listeners:
-  - gRPC Java does not expose an official stdio/memory transport comparable to Go `net.Listener` abstractions.
+- `stdio://` runtime listener:
+  - `stdio://` remains metadata-only because gRPC Java does not expose a public stdio HTTP/2 transport.
 - `ws://` / `wss://` runtime listener parity:
   - No official gRPC Java WebSocket server transport for HTTP/2 framing in the core stack.
   - Exposed as metadata only.

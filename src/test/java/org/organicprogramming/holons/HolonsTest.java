@@ -4,8 +4,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -53,6 +57,71 @@ class HolonsTest {
     void stdioAndMemListenVariants() throws IOException {
         assertTrue(Transport.listen("stdio://") instanceof Transport.StdioListener);
         assertTrue(Transport.listen("mem://") instanceof Transport.MemListener);
+    }
+
+    @Test
+    void unixListenAndDialRoundTrip(@TempDir Path tmp) throws Exception {
+        Path socketPath = tmp.resolve("holons-java.sock");
+        String uri = "unix://" + socketPath;
+
+        Transport.UnixListener lis = assertInstanceOf(
+                Transport.UnixListener.class,
+                Transport.listen(uri));
+
+        AtomicReference<Exception> serverErr = new AtomicReference<>();
+        Thread server = new Thread(() -> {
+            try (SocketChannel accepted = lis.channel().accept()) {
+                ByteBuffer in = ByteBuffer.allocate(4);
+                while (in.hasRemaining()) {
+                    accepted.read(in);
+                }
+                in.flip();
+                while (in.hasRemaining()) {
+                    accepted.write(in);
+                }
+            } catch (Exception e) {
+                serverErr.set(e);
+            }
+        });
+        server.start();
+
+        try (SocketChannel client = Transport.dialUnix(uri)) {
+            client.write(ByteBuffer.wrap("ping".getBytes(StandardCharsets.UTF_8)));
+            ByteBuffer out = ByteBuffer.allocate(4);
+            while (out.hasRemaining()) {
+                client.read(out);
+            }
+            assertEquals("ping", new String(out.array(), StandardCharsets.UTF_8));
+        } finally {
+            server.join(3000);
+            lis.channel().close();
+        }
+
+        if (serverErr.get() != null) {
+            fail(serverErr.get());
+        }
+    }
+
+    @Test
+    void memListenAndDialRoundTrip() throws Exception {
+        Transport.MemListener lis = assertInstanceOf(
+                Transport.MemListener.class,
+                Transport.listen("mem://"));
+
+        try (Transport.MemConnection client = Transport.memDial(lis);
+             Transport.MemConnection server = lis.accept(1000)) {
+            client.output().write("hola".getBytes(StandardCharsets.UTF_8));
+            client.output().flush();
+
+            byte[] in = server.input().readNBytes(4);
+            assertEquals("hola", new String(in, StandardCharsets.UTF_8));
+
+            server.output().write(in);
+            server.output().flush();
+
+            byte[] out = client.input().readNBytes(4);
+            assertEquals("hola", new String(out, StandardCharsets.UTF_8));
+        }
     }
 
     @Test

@@ -1,9 +1,20 @@
 package org.organicprogramming.holons;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
+import java.nio.channels.ServerSocketChannel;
+import java.nio.channels.SocketChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Objects;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * URI-based listener factory for gRPC servers.
@@ -53,12 +64,49 @@ public final class Transport {
     public record TcpListener(ServerSocket socket) implements Listener {
     }
 
+    /** Unix-domain socket listener. */
+    public record UnixListener(ServerSocketChannel channel, String path) implements Listener {
+    }
+
     /** stdio listener marker (single connection semantics). */
     public record StdioListener() implements Listener {
     }
 
-    /** in-process listener marker (testing/composite semantics). */
-    public record MemListener() implements Listener {
+    /** in-process listener using paired streams (testing/composite semantics). */
+    public static final class MemListener implements Listener {
+        private final BlockingQueue<MemConnection> serverQueue = new LinkedBlockingQueue<>();
+
+        public MemConnection dial() throws IOException {
+            PipedInputStreamEx clientIn = new PipedInputStreamEx();
+            PipedOutputStreamEx serverOut = new PipedOutputStreamEx(clientIn);
+            PipedInputStreamEx serverIn = new PipedInputStreamEx();
+            PipedOutputStreamEx clientOut = new PipedOutputStreamEx(serverIn);
+
+            MemConnection client = new MemConnection(clientIn, clientOut);
+            MemConnection server = new MemConnection(serverIn, serverOut);
+            serverQueue.offer(server);
+            return client;
+        }
+
+        public MemConnection accept(long timeoutMillis) throws InterruptedException {
+            MemConnection conn = serverQueue.poll(timeoutMillis, TimeUnit.MILLISECONDS);
+            if (conn == null) {
+                throw new IllegalStateException("mem:// accept timed out");
+            }
+            return conn;
+        }
+    }
+
+    /** In-process bidirectional mem connection. */
+    public record MemConnection(InputStream input, OutputStream output) implements AutoCloseable {
+        @Override
+        public void close() throws IOException {
+            try {
+                input.close();
+            } finally {
+                output.close();
+            }
+        }
     }
 
     /** WebSocket listener metadata (path + security only, no runtime server). */
@@ -119,8 +167,8 @@ public final class Transport {
      * Parse a transport URI and return a listener variant.
      *
      * <p>
-     * TCP binds a real server socket. stdio/mem/ws return metadata
-     * listener variants and must be handled by the caller runtime.
+     * TCP and Unix bind real sockets. mem:// returns an in-process
+     * runtime listener. stdio/ws/wss remain metadata-level variants.
      */
     public static Listener listen(String uri) throws IOException {
         ParsedURI parsed = parseURI(uri);
@@ -129,8 +177,7 @@ public final class Transport {
             case "tcp":
                 return new TcpListener(listenTcp(parsed));
             case "unix":
-                throw new UnsupportedOperationException(
-                        "unix:// requires a Unix-domain capable gRPC transport runtime");
+                return new UnixListener(listenUnix(parsed), Objects.requireNonNull(parsed.path()));
             case "stdio":
                 return new StdioListener();
             case "mem":
@@ -147,6 +194,25 @@ public final class Transport {
         }
     }
 
+    /**
+     * Dial a unix:// listener.
+     */
+    public static SocketChannel dialUnix(String uri) throws IOException {
+        ParsedURI parsed = parseURI(uri);
+        if (!"unix".equals(parsed.scheme())) {
+            throw new IllegalArgumentException("dialUnix expects unix:// URI: " + uri);
+        }
+        String path = Objects.requireNonNull(parsed.path());
+        return SocketChannel.open(UnixDomainSocketAddress.of(path));
+    }
+
+    /**
+     * Dial the client side of a mem:// listener.
+     */
+    public static MemConnection memDial(MemListener listener) throws IOException {
+        return listener.dial();
+    }
+
     /** Bind a TCP server socket. */
     private static ServerSocket listenTcp(ParsedURI parsed) throws IOException {
         String host = Objects.requireNonNullElse(parsed.host(), "0.0.0.0");
@@ -158,7 +224,28 @@ public final class Transport {
         return ss;
     }
 
+    private static ServerSocketChannel listenUnix(ParsedURI parsed) throws IOException {
+        String path = Objects.requireNonNull(parsed.path());
+        Files.deleteIfExists(Path.of(path));
+
+        ServerSocketChannel channel = ServerSocketChannel.open(StandardProtocolFamily.UNIX);
+        channel.bind(UnixDomainSocketAddress.of(path));
+        return channel;
+    }
+
     private record HostPort(String host, int port) {
+    }
+
+    private static final class PipedInputStreamEx extends java.io.PipedInputStream {
+        PipedInputStreamEx() {
+            super(64 * 1024);
+        }
+    }
+
+    private static final class PipedOutputStreamEx extends java.io.PipedOutputStream {
+        PipedOutputStreamEx(PipedInputStreamEx sink) throws IOException {
+            super(sink);
+        }
     }
 
     private static HostPort splitHostPort(String addr, int defaultPort) {
