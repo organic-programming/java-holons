@@ -5,7 +5,7 @@ author:
   name: "B. ALTER"
   copyright: "© 2026 Benoit Pereira da Silva"
 created: 2026-02-12
-revised: 2026-02-12
+revised: 2026-02-13
 lang: en-US
 origin_lang: en-US
 translation_of: null
@@ -44,3 +44,25 @@ gradle test
 | `mem://` | Listener marker (`Transport.MemListener`) |
 | `ws://<host>:<port>` | Listener metadata (`Transport.WSListener`) |
 | `wss://<host>:<port>` | Listener metadata (`Transport.WSListener`) |
+
+## Parity Notes vs Go Reference
+
+Implemented parity:
+
+- URI parsing and listener dispatch semantics
+- Native runtime listener for `tcp://`
+- Standard serve flag parsing
+- HOLON identity parsing
+
+Not currently achievable in this minimal Java core (justified gaps):
+
+- `unix://` native runtime binding:
+  - Requires a Unix-domain capable Java gRPC runtime stack (typically Netty native transport).
+  - This SDK intentionally stays on pure JDK socket primitives.
+- `stdio://` and `mem://` runtime listeners:
+  - gRPC Java does not expose an official stdio/memory transport comparable to Go `net.Listener` abstractions.
+- `ws://` / `wss://` runtime listener parity:
+  - No official gRPC Java WebSocket server transport for HTTP/2 framing in the core stack.
+  - Exposed as metadata only.
+- Transport-agnostic gRPC client helpers (`Dial`, `DialStdio`, `DialMem`, `DialWebSocket`):
+  - Requires a dedicated Java gRPC adapter layer that is not yet included.
