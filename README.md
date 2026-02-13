@@ -65,6 +65,9 @@ Not currently achievable in this minimal Java core (justified gaps):
 - `ws://` / `wss://` runtime listener parity:
   - No official gRPC Java WebSocket server transport for HTTP/2 framing in the core stack.
   - Exposed as metadata only.
+- gRPC `Dial("ws://...")` / `Dial("wss://...")`:
+  - gRPC Java has no official client transport that tunnels HTTP/2 frames directly over WebSocket.
+  - Implementing this would require a custom bridge/proxy layer outside the minimal core.
 - Full gRPC transport parity (`Dial("tcp://...")`, `Dial("stdio://...")`, `Listen("stdio://...")`, and `Serve.Run()` wiring):
   - gRPC Java has no official stdio transport equivalent to Go `net.Listener` for process pipes.
   - A complete `serve.Run()` equivalent also needs custom signal + reflection wiring not yet included in this SDK core.
