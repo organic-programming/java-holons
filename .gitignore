@@ -4,3 +4,5 @@ bin/*
 !bin/echo-client
 !bin/echo-server
 bin/
+
+*.class
