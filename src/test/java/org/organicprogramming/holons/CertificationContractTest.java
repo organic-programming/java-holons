@@ -1,5 +1,7 @@
 package org.organicprogramming.holons;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -7,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CertificationContractTest {
@@ -14,11 +17,14 @@ class CertificationContractTest {
     @Test
     void certJsonDeclaresDialCapabilitiesAndExecutables() throws IOException {
         String cert = Files.readString(projectRoot().resolve("cert.json"), StandardCharsets.UTF_8);
+        JsonObject root = JsonParser.parseString(cert).getAsJsonObject();
+        JsonObject executables = root.getAsJsonObject("executables");
+        JsonObject capabilities = root.getAsJsonObject("capabilities");
 
-        assertTrue(cert.contains("\"echo_client\": \"./bin/echo-client\""));
-        assertTrue(cert.contains("\"echo_server\": \"./bin/echo-server\""));
-        assertTrue(cert.contains("\"grpc_dial_tcp\": true"));
-        assertTrue(cert.contains("\"grpc_dial_stdio\": true"));
+        assertEquals("./bin/echo-client", executables.get("echo_client").getAsString());
+        assertEquals("./bin/echo-server", executables.get("echo_server").getAsString());
+        assertTrue(capabilities.get("grpc_dial_tcp").getAsBoolean());
+        assertTrue(capabilities.get("grpc_dial_stdio").getAsBoolean());
     }
 
     @Test
