@@ -32,7 +32,7 @@ gradle test
 |-------|-------------|
 | `Transport` | `parseURI(uri)`, `listen(uri)`, `scheme(uri)` — URI parser + listener variants |
 | `Serve` | `parseFlags(args)` — CLI arg extraction |
-| `Identity` | `parseHolon(path)` — HOLON.md parser with SnakeYAML |
+| `Identity` | `parseHolon(path)` — holon.yaml parser with SnakeYAML |
 | `HolonRPCClient` | `connect(url)`, `invoke(method, params)`, `register(method, handler)`, `close()` |
 
 ## Transport support
