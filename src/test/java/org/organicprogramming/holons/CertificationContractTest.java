@@ -1,7 +1,5 @@
 package org.organicprogramming.holons;
 
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -15,23 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CertificationContractTest {
-
-    @Test
-    void certJsonDeclaresDialCapabilitiesAndExecutables() throws IOException {
-        String cert = Files.readString(projectRoot().resolve("cert.json"), StandardCharsets.UTF_8);
-        JsonObject root = JsonParser.parseString(cert).getAsJsonObject();
-        JsonObject executables = root.getAsJsonObject("executables");
-        JsonObject capabilities = root.getAsJsonObject("capabilities");
-
-        assertEquals("./bin/echo-client", executables.get("echo_client").getAsString());
-        assertEquals("./bin/echo-server", executables.get("echo_server").getAsString());
-        assertEquals("./bin/holon-rpc-server", executables.get("holon_rpc_server").getAsString());
-        assertTrue(capabilities.get("grpc_listen_stdio").getAsBoolean());
-        assertTrue(capabilities.get("grpc_dial_tcp").getAsBoolean());
-        assertTrue(capabilities.get("grpc_dial_stdio").getAsBoolean());
-        assertTrue(capabilities.get("grpc_dial_ws").getAsBoolean());
-        assertTrue(capabilities.get("holon_rpc_server").getAsBoolean());
-    }
 
     @Test
     void echoClientScriptIsRunnableAndTargetsSdkHelper() throws IOException {

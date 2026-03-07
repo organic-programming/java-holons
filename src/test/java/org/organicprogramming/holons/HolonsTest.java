@@ -165,12 +165,11 @@ class HolonsTest {
 
     @Test
     void parseHolon(@TempDir Path tmp) throws IOException {
-        Path holon = tmp.resolve("HOLON.md");
+        Path holon = tmp.resolve("holon.yaml");
         Files.writeString(holon,
-                "---\nuuid: \"abc-123\"\ngiven_name: \"test\"\n" +
+                "uuid: \"abc-123\"\ngiven_name: \"test\"\n" +
                         "family_name: \"Test\"\nmotto: \"A test.\"\n" +
-                        "clade: \"deterministic/pure\"\nlang: \"java\"\n" +
-                        "---\n# test\n");
+                        "clade: \"deterministic/pure\"\nlang: \"java\"\n");
 
         Identity.HolonIdentity id = Identity.parseHolon(holon);
         assertEquals("abc-123", id.uuid());
@@ -179,9 +178,9 @@ class HolonsTest {
     }
 
     @Test
-    void parseMissingFrontmatter(@TempDir Path tmp) throws IOException {
-        Path holon = tmp.resolve("HOLON.md");
-        Files.writeString(holon, "# No frontmatter\n");
+    void parseInvalidMapping(@TempDir Path tmp) throws IOException {
+        Path holon = tmp.resolve("holon.yaml");
+        Files.writeString(holon, "- not\n- a\n- mapping\n");
         assertThrows(IllegalArgumentException.class,
                 () -> Identity.parseHolon(holon));
     }

@@ -9,9 +9,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Parse HOLON.md identity files.
- */
+/** Parse holon.yaml identity files. */
 public final class Identity {
 
     private Identity() {
@@ -35,27 +33,16 @@ public final class Identity {
             List<String> aliases) {
     }
 
-    /**
-     * Parse a HOLON.md file and return its identity.
-     */
+    /** Parse a holon.yaml file and return its identity. */
     @SuppressWarnings("unchecked")
     public static HolonIdentity parseHolon(Path path) throws IOException {
         String text = Files.readString(path);
-
-        if (!text.startsWith("---")) {
-            throw new IllegalArgumentException(path + ": missing YAML frontmatter");
-        }
-
-        int endIdx = text.indexOf("---", 3);
-        if (endIdx < 0) {
-            throw new IllegalArgumentException(path + ": unterminated frontmatter");
-        }
-
-        String frontmatter = text.substring(3, endIdx).trim();
         Yaml yaml = new Yaml();
-        Map<String, Object> data = yaml.load(frontmatter);
-        if (data == null)
-            data = Map.of();
+        Object loaded = yaml.load(text);
+        if (!(loaded instanceof Map<?, ?> raw)) {
+            throw new IllegalArgumentException(path + ": holon.yaml must be a YAML mapping");
+        }
+        Map<String, Object> data = (Map<String, Object>) raw;
 
         return new HolonIdentity(
                 str(data, "uuid"),
